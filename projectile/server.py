@@ -12,7 +12,7 @@ from projectile.get_test_data import main as get_test_data
 
 
 class TileHandler(web.RequestHandler):
-    def initialize(self, array):
+    def initialize(self, array, tile_size=8):
         """
         Initializes the request handler.
 
@@ -20,8 +20,12 @@ class TileHandler(web.RequestHandler):
         ----------
         array : np.ndarray
             The array this handler will serve.
+        tile_size : int
+            The base 2 log of the maximum tile size to use, in pixels.
         """
         self.array = array
+        self.max_z = int(np.ceil(np.log2(max(self.array.shape))))
+        self.tile_size = tile_size
 
     def get(self, z, x, y):
         """
@@ -29,10 +33,12 @@ class TileHandler(web.RequestHandler):
 
         Parameters
         ----------
-        z, x, y : int
+        z, x, y : str
             The zoom level, x index, and y index of the requested tile.
         """
-        image = self.make_image(self.get_slices(z, x, y))
+        z, x, y = map(int, (z, x, y))
+        image = self.make_image(self.get_slices(z, x, y), z,
+                                tile_size=self.tile_size)
         stream = StringIO()
         image.save(stream, format='png')
         for line in stream.getvalue():
@@ -51,43 +57,78 @@ class TileHandler(web.RequestHandler):
 
         Returns
         -------
-        (slice, slice)
+        (slice, slice) or None
             The row and column slices appropriate for slicing out the desired
-            tile from the complete array.
+            tile from the complete array. If the slice requested is
+            out-of-bounds then None is returned.
         """
-        z, x, y = map(int, (z, x, y))
-        max_z = int(np.ceil(np.log2(max(self.array.shape))))
-        size = 2 ** (max_z - z)
+        size = 2 ** (self.max_z - z)
+        max_x = self.array.shape[1] / size
+        max_y = self.array.shape[0] / size
+        if x < 0 or x > max_x or y < 0 or y > max_y:
+            return None
         return slice(y * size, (y+1) * size), slice(x * size, (x+1) * size)
 
-    def make_image(self, slices):
+    def make_image(self, slices, z, tile_size=8):
         """
-        Slices the array and puts it into a PIL image.
+        Slices the array, shrinks it, and puts it into a PIL image.
 
         Parameters
         ----------
         slices : (slice, slice)
             The row and column slices appropriate for slicing out the desired
             tile from the complete array.
+        z : int
+            The requested zoom level (determines how much shrinkage to apply).
+        tile_size : int
+            The base 2 log of the maximum tile size to use, in pixels.
 
         Returns
         -------
         PIL.Image
-            The sliced image.
+            The sliced and shrunk image.
         """
-        return Image.fromarray((self.array[slices]*255).astype(np.uint8))
+        if slices is None:
+            return Image.fromarray(np.full((1, 1), 255, dtype=np.uint8))
+        size = slices[0].stop - slices[0].start
+        shrinkage_factor = 2 ** (self.max_z - z - tile_size)
+        sliced_array = self.array[slices]
+        pad = [(0, 0)] * len(sliced_array.shape)
+        if sliced_array.shape[0] < size:
+            pad[0] = (0, size - sliced_array.shape[0])
+        if sliced_array.shape[1] < size:
+            pad[1] = (0, size - sliced_array.shape[1])
+        sliced_array = np.pad(sliced_array, pad, mode='constant',
+                              constant_values=1)
+        return Image.fromarray((self.shrink_array(
+            sliced_array, shrinkage_factor) * 255).astype(np.uint8))
+
+    @staticmethod
+    def shrink_array(array, factor):
+        if factor < 2:
+            return array
+        shape = [array.shape[0] / factor, array.shape[1] / factor,
+                 factor, factor]
+        strides = [array.strides[0] * factor, array.strides[1] * factor,
+                   array.strides[0], array.strides[1]]
+        if len(array.shape) == 3:
+            shape.append(array.shape[2])
+            strides.append(array.strides[2])
+        return np.lib.stride_tricks.as_strided(array, shape, strides)\
+            .max(axis=(2, 3))
 
 
-def make_app(array, client=None, debug=False):
+def make_app(array, tile_size=8, client=None, debug=False):
     if client is None:
         client = '%s/client.html' % os.path.abspath(os.path.dirname(__file__))
     return web.Application([
         (r'/()$', web.StaticFileHandler, {'path': client}),
-        (r'/([0-9]+)/([0-9]+)/([0-9]+).png', TileHandler, dict(array=array))
+        (r'/([0-9]+)/([0-9]+)/([0-9]+).png', TileHandler,
+         {'array': array, 'tile_size': tile_size})
     ], debug=debug)
 
 
-def run(array, client=None, port=8000, debug=False):
+def run(array, tile_size=8, client=None, port=8000, debug=False):
     """
     Start a Tornado server serving a numpy array.
 
@@ -95,6 +136,8 @@ def run(array, client=None, port=8000, debug=False):
     ----------
     array : np.ndarray
         The array to serve.
+    tile_size : int
+        The base 2 log of the maximum tile size to use, in pixels.
     client : str, optional
         Path to a client HTML file to serve at the root URL. Pass None to use
         the included demo client.
@@ -103,7 +146,7 @@ def run(array, client=None, port=8000, debug=False):
     debug : bool
         Pass True to start the server in debug mode.
     """
-    app = make_app(array, client=client, debug=debug)
+    app = make_app(array, tile_size=tile_size, client=client, debug=debug)
     app.listen(port)
     ioloop.IOLoop.instance().start()
 
@@ -117,6 +160,10 @@ def main():
         '-m', '--mode', choices=['RGB', 'L'], default='RGB', help='''If input is
         an image, specify whether to read it in RGB or grayscale (L) mode.
         Default is RGB.''')
+    parser.add_argument(
+        '-t', '--tile_size', type=int, default=8, help='''The maximum size of
+        image tiles to serve, on a log base 2 scale. The default is 8 for
+        256 x 256 pixel image tiles.''')
     parser.add_argument(
         '-c', '--client', help='''Specify a custom client HTML file to
         serve.''')
@@ -147,7 +194,8 @@ def main():
         array = image_to_array(args.input, mode=args.mode)
 
     print('starting server at http://localhost:%s/' % args.port)
-    run(array, client=args.client, port=args.port, debug=args.debug)
+    run(array, tile_size=args.tile_size, client=args.client, port=args.port,
+        debug=args.debug)
 
 
 if __name__ == '__main__':

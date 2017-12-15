@@ -11,6 +11,10 @@ array. Then when a client requests a particular tile, we can make the PNG of the
 requested tile by slicing the numpy array and using PIL to write the resulting
 PNG back to the client through a StringIO stream.
 
+This is primarily intended for building interactive visualizations in research
+settings where we might want to skip the time- and/or disk-intensive tile
+generation step required by typical tile servers.
+
 Demo
 ----
 
@@ -33,6 +37,21 @@ Serve one of your own images with
 or, if you have data in a numpy `.npy` file,
 
     $ projectile some_image.npy
+
+Stress testing
+--------------
+
+To test the performance limits of on-demand tiling, download this
+[high resolution map of Great Britain](https://commons.wikimedia.org/wiki/File:A_new_map_of_Great_Britain_according_to_the_newest_and_most_exact_observations_(8342715024).jpg)
+(8,150 × 13,086 pixels, file size: 102.74 MB) from Wikimedia Commons.
+
+Grayscale performance test:
+
+    $ projectile britain.jpg -m L
+
+Reducing tile resolution when running in color:
+
+    $ projectile britain.jpg --tile_size 7
 
 Dependencies
 ------------
