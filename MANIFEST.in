@@ -1,0 +1,2 @@
+include versioneer.py
+include projectile/_version.py

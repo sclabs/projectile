@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+body {
+  margin: 0;
+}
+
+image {
+    image-rendering: pixelated;
+}
+
+</style>
+<svg></svg>
+<script src="//d3js.org/d3.v4.min.js"></script>
+<script src="//d3js.org/d3-tile.v0.0.min.js"></script>
+<script>
+
+var width = Math.max(960, window.innerWidth),
+    height = Math.max(500, window.innerHeight);
+
+var tile = d3.tile()
+    .size([width, height]);
+
+var zoom = d3.zoom()
+    .scaleExtent([1 << 9, 1 << 14])
+    .on("zoom", zoomed);
+
+var svg = d3.select("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+var raster = svg.append("g");
+
+var center = [0, 0];
+
+function zoomed() {
+  var transform = d3.event.transform;
+
+  var tiles = tile
+      .scale(transform.k)
+      .translate([transform.x, transform.y])
+      ();
+  var trimmedTiles = tiles.filter(function(t) {
+      return t[0] < (1 << t[2]) && t[1] < (1 << t[2])
+  });
+
+  var image = raster
+      .attr("transform", stringify(tiles.scale, tiles.translate))
+    .selectAll("image")
+    .data(trimmedTiles, function(d) { return d; });
+
+  image.exit().remove();
+
+  image.enter().append("image")
+      .attr("xlink:href", function(d) { return "/" + d[2] + "/" + d[0] + "/" + d[1] + ".png"; })
+      .attr("x", function(d) { return d[0] * 256; })
+      .attr("y", function(d) { return d[1] * 256; })
+      .attr("width", 256)
+      .attr("height", 256);
+}
+
+function stringify(scale, translate) {
+  var k = scale / 256, r = scale % 1 ? Number : Math.round;
+  return "translate(" + r(translate[0] * scale) + "," + r(translate[1] * scale) + ") scale(" + k + ")";
+}
+
+svg
+    .call(zoom)
+    .call(zoom.transform, d3.zoomIdentity
+        .translate(width / 2, height / 2)
+        .scale(1 << 12)
+        .translate(-center[0], -center[1]));
+
+</script>
