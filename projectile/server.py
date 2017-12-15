@@ -2,7 +2,7 @@ import argparse
 from six.moves import cStringIO as StringIO
 import os
 
-from tornado import ioloop, web
+from tornado import ioloop, web, gen, httpserver
 from PIL import Image
 import numpy as np
 
@@ -27,6 +27,7 @@ class TileHandler(web.RequestHandler):
         self.max_z = int(np.ceil(np.log2(max(self.array.shape))))
         self.tile_size = tile_size
 
+    @gen.coroutine
     def get(self, z, x, y):
         """
         Responds to the request with a specific image tile (as PNG).
@@ -37,8 +38,8 @@ class TileHandler(web.RequestHandler):
             The zoom level, x index, and y index of the requested tile.
         """
         z, x, y = map(int, (z, x, y))
-        image = self.make_image(self.get_slices(z, x, y), z,
-                                tile_size=self.tile_size)
+        image = yield self.make_image(self.get_slices(z, x, y), z,
+                                      tile_size=self.tile_size)
         stream = StringIO()
         image.save(stream, format='png')
         for line in stream.getvalue():
@@ -69,6 +70,7 @@ class TileHandler(web.RequestHandler):
             return None
         return slice(y * size, (y+1) * size), slice(x * size, (x+1) * size)
 
+    @gen.coroutine
     def make_image(self, slices, z, tile_size=8):
         """
         Slices the array, shrinks it, and puts it into a PIL image.
@@ -100,8 +102,8 @@ class TileHandler(web.RequestHandler):
             pad[1] = (0, size - sliced_array.shape[1])
         sliced_array = np.pad(sliced_array, pad, mode='constant',
                               constant_values=1)
-        return Image.fromarray((self.shrink_array(
-            sliced_array, shrinkage_factor) * 255).astype(np.uint8))
+        raise gen.Return(Image.fromarray((self.shrink_array(
+            sliced_array, shrinkage_factor) * 255).astype(np.uint8)))
 
     @staticmethod
     def shrink_array(array, factor):
@@ -128,7 +130,8 @@ def make_app(array, tile_size=8, client=None, debug=False):
     ], debug=debug)
 
 
-def run(array, tile_size=8, client=None, port=8000, debug=False):
+def run(array, tile_size=8, client=None, port=8000, num_procs=1,
+        debug=False):
     """
     Start a Tornado server serving a numpy array.
 
@@ -143,12 +146,18 @@ def run(array, tile_size=8, client=None, port=8000, debug=False):
         the included demo client.
     port : int
         Port to start the server on.
+    num_procs : bool
+        Number of server processes to start. Must be 1 on Windows.
     debug : bool
         Pass True to start the server in debug mode.
     """
+    if num_procs != 1 and not hasattr(os, 'fork'):
+        raise OSError('parallel mode not supported on Windows')
     app = make_app(array, tile_size=tile_size, client=client, debug=debug)
-    app.listen(port)
-    ioloop.IOLoop.instance().start()
+    server = httpserver.HTTPServer(app)
+    server.bind(port)
+    server.start(num_procs)
+    ioloop.IOLoop.current().start()
 
 
 def main():
@@ -170,6 +179,11 @@ def main():
     parser.add_argument(
         '-p', '--port', type=int, default=8000, help='''The port to start the
         server on. Default is 8000.''')
+    parser.add_argument(
+        '-n', '--num_procs', type=int, default=1, help='''Specify how many
+        server processes to start in parallel. Pass 0 to start one process per
+        CPU. Default is 1. On Windows, passing anything other than 1 is not
+        supported.''')
     parser.add_argument(
         '-D', '--debug', action='store_true', help='''Pass this flag to start
         the server in debug mode.''')
@@ -195,7 +209,7 @@ def main():
 
     print('starting server at http://localhost:%s/' % args.port)
     run(array, tile_size=args.tile_size, client=args.client, port=args.port,
-        debug=args.debug)
+        num_procs=args.num_procs, debug=args.debug)
 
 
 if __name__ == '__main__':
