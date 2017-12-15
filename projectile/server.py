@@ -146,7 +146,7 @@ def main():
         print('image detected')
         array = image_to_array(args.input, mode=args.mode)
 
-    print('starting app')
+    print('starting server at http://localhost:%s/' % args.port)
     run(array, client=args.client, port=args.port, debug=args.debug)
 
 

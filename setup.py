@@ -33,7 +33,6 @@ setup(
         'Operating System :: OS Independent',
         'Topic :: Multimedia :: Graphics :: Viewers',
         'Topic :: Scientific/Engineering :: Visualization',
-
     ],
     keywords='tileserver tile server on-demand tiling',
     packages=find_packages(),
@@ -41,8 +40,11 @@ setup(
         'numpy>=1.13.3',
         'Pillow>=4.3.0',
         'tornado>=4.5.2',
-        'six>=1.11.0'
+        'six>=1.11.0',
     ],
+    package_data={
+        'projectile': ['client.html'],
+    },
     entry_points={
         'console_scripts': [
             'projectile=projectile.server:main',
