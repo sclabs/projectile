@@ -5,6 +5,8 @@ import os
 from tornado import ioloop, web
 from PIL import Image
 import numpy as np
+import matplotlib.colors as colors
+import matplotlib.cm as cm
 
 import projectile
 from projectile.image_to_array import image_to_array
@@ -37,13 +39,8 @@ class TileHandler(web.RequestHandler):
             The zoom level, x index, and y index of the requested tile.
         """
         z, x, y = map(int, (z, x, y))
-        image = self.make_image(self.get_slices(z, x, y), z,
-                                tile_size=self.tile_size)
-        stream = StringIO()
-        image.save(stream, format='png')
-        for line in stream.getvalue():
-            self.write(line)
-        self.set_header('Content-type', 'image/png')
+        self.send_image(self.make_image(self.get_array_slice(
+            self.get_slices(z, x, y), z, tile_size=self.tile_size)))
 
     def get_slices(self, z, x, y):
         """
@@ -69,17 +66,20 @@ class TileHandler(web.RequestHandler):
             return None
         return slice(y * size, (y+1) * size), slice(x * size, (x+1) * size)
 
-    def make_image(self, slices, z, tile_size=8):
+    def get_array_slice(self, slices, z, tile_size=8):
         """
-        Slices the array, shrinks it, and puts it into a PIL image.
+        Slices out the part of the array specified by slices, and shrinks it to
+        a specified maximum tile size if necessary.
 
         Parameters
         ----------
         slices : (slice, slice)
-            The row and column slices appropriate for slicing out the desired
+            The row and column slices appropriate for slicing out the
+            desired
             tile from the complete array.
         z : int
-            The requested zoom level (determines how much shrinkage to apply).
+            The requested zoom level (determines how much shrinkage
+            to apply).
         tile_size : int
             The base 2 log of the maximum tile size to use, in pixels.
 
@@ -100,11 +100,25 @@ class TileHandler(web.RequestHandler):
             pad[1] = (0, size - sliced_array.shape[1])
         sliced_array = np.pad(sliced_array, pad, mode='constant',
                               constant_values=1)
-        return Image.fromarray((self.shrink_array(
-            sliced_array, shrinkage_factor) * 255).astype(np.uint8))
+        return self.shrink_array(sliced_array, shrinkage_factor)
 
     @staticmethod
     def shrink_array(array, factor):
+        """
+        Shrinks an array by a factor using max-pooling.
+
+        Parameters
+        ----------
+        array : np.ndarray
+            The array to shrink. Can have either 2 or 3 dimensions.
+        factor : int
+            The factor to shrink by.
+
+        Returns
+        -------
+        np.ndarray
+            The shrunken array.
+        """
         if factor < 2:
             return array
         shape = [array.shape[0] / factor, array.shape[1] / factor,
@@ -117,6 +131,83 @@ class TileHandler(web.RequestHandler):
         return np.lib.stride_tricks.as_strided(array, shape, strides)\
             .max(axis=(2, 3))
 
+    @staticmethod
+    def make_image(array_slice):
+        """
+        Creates a PIL Image from an array slice.
+
+        Parameters
+        ----------
+        array_slice : np.ndarray
+            The array slice to make the Image from.
+
+        Returns
+        -------
+        PIL.Image
+            The Image.
+        """
+        return Image.fromarray((array_slice * 255).astype(np.uint8))
+
+    def send_image(self, image):
+        """
+        Sends a PIL Image as the response to this request.
+
+        Parameters
+        ----------
+        image : PIL.Image
+            The Image to respond with.
+        """
+        stream = StringIO()
+        image.save(stream, format='png')
+        for line in stream.getvalue():
+            self.write(line)
+        self.set_header('Content-type', 'image/png')
+
+
+class CmapTileHandler(TileHandler):
+    def get(self, z, x, y, cmap, vmin, vmax):
+        """
+        Responds to the request with a specific image tile (as PNG), after
+        applying a matplotlib colormap to the image.
+
+        Parameters
+        ----------
+        z, x, y : str
+            The zoom level, x index, and y index of the requested tile.
+        cmap : str
+            Reference to a matplotlib colormap to use.
+        vmin, vmax : str
+            The minimum and maximum values of the colorscale to use.
+        """
+        z, x, y, vmin, vmax = map(int, (z, x, y, vmin, vmax))
+        self.send_image(self.make_image(self.get_array_slice(
+            self.get_slices(z, x, y), z, tile_size=self.tile_size),
+            cmap, vmin, vmax))
+
+    def make_image(self, array_slice, cmap, vmin, vmax):
+        """
+        Creates a PIL Image from an array slice, after applying a matplotlib
+        colormap to the image.
+
+        Parameters
+        ----------
+        array_slice : np.ndarray
+            The array slice to make the Image from.
+        cmap : str
+            Reference to a matplotlib colormap to use.
+        vmin, vmax : int
+            The minimum and maximum values of the colorscale to use.
+
+        Returns
+        -------
+        PIL.Image
+            The Image.
+        """
+        norm = colors.Normalize(vmin=vmin, vmax=vmax)
+        m = cm.ScalarMappable(norm=norm, cmap=getattr(cm, cmap))
+        rgb = m.to_rgba(array_slice)
+        return super(CmapTileHandler, self).make_image(rgb)
+
 
 def make_app(array, tile_size=8, client=None, debug=False):
     if client is None:
@@ -124,7 +215,9 @@ def make_app(array, tile_size=8, client=None, debug=False):
     return web.Application([
         (r'/()$', web.StaticFileHandler, {'path': client}),
         (r'/([0-9]+)/([0-9]+)/([0-9]+).png', TileHandler,
-         {'array': array, 'tile_size': tile_size})
+         {'array': array, 'tile_size': tile_size}),
+        (r'/([0-9]+)/([0-9]+)/([0-9]+)/(\w+)/([0-9]+)/([0-9]+).png',
+         CmapTileHandler, {'array': array, 'tile_size': tile_size})
     ], debug=debug)
 
 

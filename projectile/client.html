@@ -23,7 +23,7 @@ var tile = d3.tile()
     .size([width, height]);
 
 var zoom = d3.zoom()
-    .scaleExtent([1 << 9, 1 << 14])
+    .scaleExtent([1 << 9, 1 << 20])
     .on("zoom", zoomed);
 
 var svg = d3.select("svg")
@@ -53,7 +53,7 @@ function zoomed() {
   image.exit().remove();
 
   image.enter().append("image")
-      .attr("xlink:href", function(d) { return "/" + d[2] + "/" + d[0] + "/" + d[1] + ".png"; })
+      .attr("xlink:href", function(d) { return "/" + d[2] + "/" + d[0] + "/" + d[1] + "/Reds/0/25.png"; })
       .attr("x", function(d) { return d[0] * 256; })
       .attr("y", function(d) { return d[1] * 256; })
       .attr("width", 256)

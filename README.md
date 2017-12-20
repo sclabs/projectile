@@ -59,7 +59,7 @@ Dependencies
  - `numpy>=1.13.3`
  - `Pillow>=4.3.0`
  - `tornado>=4.5.2`
- - `six>=1.11.0`
+ - `matplotlib>=2.1.0`
 
 API
 ---
