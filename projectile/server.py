@@ -184,7 +184,8 @@ class CmapTileHandler(TileHandler):
         vmin, vmax : str
             The minimum and maximum values of the colorscale to use.
         """
-        z, x, y, s, vmin, vmax = map(int, (z, x, y, s, vmin, vmax))
+        z, x, y, s = map(int, (z, x, y, s))
+        vmin, vmax = map(float, (vmin, vmax))
         self.send_image(self.make_image(self.resize_array(self.get_array_slice(
             self.get_slices(z, x, y)), s), cmap, vmin, vmax))
 
@@ -234,7 +235,7 @@ def make_app(array, cmap=None, tile_size=256, client=None, debug=False):
         (r'/()$', web.StaticFileHandler, {'path': client}),
         (r'/([0-9]+)/([0-9]+)/([0-9]+)/([0-9]+).png', TileHandler,
          {'array': array}),
-        (r'/([0-9]+)/([0-9]+)/([0-9]+)/([0-9]+)/(\w+)/([0-9]+)/([0-9]+).png',
+        (r'/([0-9]+)/([0-9]+)/([0-9]+)/([0-9]+)/(\w+)/([^/]+)/([^/]+).png',
          CmapTileHandler, {'array': array})
     ], debug=debug)
 
