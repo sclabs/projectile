@@ -30,13 +30,17 @@ Manually request a particular tile by navigating to <http://localhost:8000/2/1/2
 
 Try zooming and panning in the demo client by navigating to <http://localhost:8000/>.
 
-Serve one of your own images with
+Serve one of your own images (any format readable by PIL) with
 
     $ projectile some_image.tiff
 
 or, if you have data in a numpy `.npy` file,
 
     $ projectile some_image.npy
+
+Load an image in grayscale mode and apply a colormap:
+
+    $ projectile --mode L --cmap viridis pentagon
 
 Stress testing
 --------------
@@ -59,7 +63,7 @@ Dependencies
  - `numpy>=1.13.3`
  - `Pillow>=4.3.0`
  - `tornado>=4.5.2`
- - `six>=1.11.0`
+ - `matplotlib>=2.1.0`
 
 API
 ---
