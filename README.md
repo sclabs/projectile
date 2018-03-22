@@ -55,7 +55,7 @@ Grayscale performance test:
 
 Reducing tile resolution when running in color:
 
-    $ projectile britain.jpg --tile_size 7
+    $ projectile britain.jpg --tile_size 128
 
 Dependencies
 ------------
@@ -67,6 +67,24 @@ Dependencies
 
 API
 ---
+
+### URL scheme
+
+The server will serve grayscale and RGB images in their original colors at
+
+    /<z>/<x>/<y>/<s>.png
+
+where `<z>` is the zoom level, `<x>` and `<y>` specify the coordinates of the
+tile at that zoom level (`0/0` is the top left tile), and `<s>` specifies the
+image tile resolution in pixels (must be a power of 2).
+
+The server will serve colormapped versions of a grayscale image at
+
+    /<z>/<x>/<y>/<s>/<cmap>/<vmin>/<vmax>.png
+
+where `<cmap>` is the name of a matplotlib colormap, and `<vmin>` and `<vmax>`
+specify the range of image pixel values linearly interpolate against the
+colormap (pixel values outside this range will be clipped).
 
 ### Using a custom client
 
@@ -90,7 +108,8 @@ from projectile.server import TileHandler
 ...
 
 app = web.Application([
-    (r'/([0-9]+)/([0-9]+)/([0-9]+).png', TileHandler, dict(array=array)),
+    (r'/([0-9]+)/([0-9]+)/([0-9]+)/([0-9]+).png', TileHandler,
+     dict(array=array)),
     ...
 ])
 

@@ -16,6 +16,8 @@ image {
 <script src="//d3js.org/d3-tile.v0.0.min.js"></script>
 <script>
 
+var tileSize = parseInt("{{ tile_size }}");
+
 var width = Math.max(960, window.innerWidth),
     height = Math.max(500, window.innerHeight);
 
@@ -53,15 +55,15 @@ function zoomed() {
   image.exit().remove();
 
   image.enter().append("image")
-      .attr("xlink:href", function(d) { return "/" + d[2] + "/" + d[0] + "/" + d[1] + "{{ cmap_string }}.png"; })
-      .attr("x", function(d) { return d[0] * 256; })
-      .attr("y", function(d) { return d[1] * 256; })
-      .attr("width", 256)
-      .attr("height", 256);
+      .attr("xlink:href", function(d) { return "/" + d[2] + "/" + d[0] + "/" + d[1] + "/" + tileSize + "{{ cmap_string }}.png"; })
+      .attr("x", function(d) { return d[0] * tileSize; })
+      .attr("y", function(d) { return d[1] * tileSize; })
+      .attr("width", tileSize)
+      .attr("height", tileSize);
 }
 
 function stringify(scale, translate) {
-  var k = scale / 256, r = scale % 1 ? Number : Math.round;
+  var k = scale / tileSize, r = scale % 1 ? Number : Math.round;
   return "translate(" + r(translate[0] * scale) + "," + r(translate[1] * scale) + ") scale(" + k + ")";
 }
 
