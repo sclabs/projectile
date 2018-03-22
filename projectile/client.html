@@ -53,7 +53,7 @@ function zoomed() {
   image.exit().remove();
 
   image.enter().append("image")
-      .attr("xlink:href", function(d) { return "/" + d[2] + "/" + d[0] + "/" + d[1] + "/Reds/0/25.png"; })
+      .attr("xlink:href", function(d) { return "/" + d[2] + "/" + d[0] + "/" + d[1] + "{{ cmap_string }}.png"; })
       .attr("x", function(d) { return d[0] * 256; })
       .attr("y", function(d) { return d[1] * 256; })
       .attr("width", 256)

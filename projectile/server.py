@@ -85,11 +85,11 @@ class TileHandler(web.RequestHandler):
 
         Returns
         -------
-        PIL.Image
-            The sliced and shrunk image.
+        np.ndarray
+            The sliced and shrunken array.
         """
         if slices is None:
-            return Image.fromarray(np.full((1, 1), 255, dtype=np.uint8))
+            return np.full((1, 1), 255, dtype=np.uint8)
         size = slices[0].stop - slices[0].start
         shrinkage_factor = 2 ** (self.max_z - z - tile_size)
         sliced_array = self.array[slices]
@@ -209,10 +209,21 @@ class CmapTileHandler(TileHandler):
         return super(CmapTileHandler, self).make_image(rgb)
 
 
-def make_app(array, tile_size=8, client=None, debug=False):
+class ClientHandler(web.RequestHandler):
+    def initialize(self, client, cmap=None):
+        self.client = client
+        self.cmap = cmap
+
+    def get(self):
+        cmap_string = '/%s/0/255' % self.cmap if self.cmap else ''
+        self.render(self.client, cmap_string=cmap_string)
+
+
+def make_app(array, cmap=None, tile_size=8, client=None, debug=False):
     if client is None:
         client = '%s/client.html' % os.path.abspath(os.path.dirname(__file__))
     return web.Application([
+        (r'/', ClientHandler, {'client': client, 'cmap': cmap}),
         (r'/()$', web.StaticFileHandler, {'path': client}),
         (r'/([0-9]+)/([0-9]+)/([0-9]+).png', TileHandler,
          {'array': array, 'tile_size': tile_size}),
@@ -221,7 +232,7 @@ def make_app(array, tile_size=8, client=None, debug=False):
     ], debug=debug)
 
 
-def run(array, tile_size=8, client=None, port=8000, debug=False):
+def run(array, cmap=None, tile_size=8, client=None, port=8000, debug=False):
     """
     Start a Tornado server serving a numpy array.
 
@@ -229,6 +240,9 @@ def run(array, tile_size=8, client=None, port=8000, debug=False):
     ----------
     array : np.ndarray
         The array to serve.
+    cmap : matplotlib colormap, optional
+        Pass the name of a matplotlib colormap to colorize `array` if it is
+        grayscale.
     tile_size : int
         The base 2 log of the maximum tile size to use, in pixels.
     client : str, optional
@@ -239,7 +253,8 @@ def run(array, tile_size=8, client=None, port=8000, debug=False):
     debug : bool
         Pass True to start the server in debug mode.
     """
-    app = make_app(array, tile_size=tile_size, client=client, debug=debug)
+    app = make_app(array, cmap=cmap, tile_size=tile_size, client=client,
+                   debug=debug)
     app.listen(port)
     ioloop.IOLoop.instance().start()
 
@@ -254,12 +269,15 @@ def main():
         an image, specify whether to read it in RGB or grayscale (L) mode.
         Default is RGB.''')
     parser.add_argument(
+        '-c', '--cmap', help='''If input is a .npy file or an image read in
+        grayscale (L) mode, specify the name of a matplotlib colormap to use to
+        color the tiles.''')
+    parser.add_argument(
         '-t', '--tile_size', type=int, default=8, help='''The maximum size of
         image tiles to serve, on a log base 2 scale. The default is 8 for
         256 x 256 pixel image tiles.''')
     parser.add_argument(
-        '-c', '--client', help='''Specify a custom client HTML file to
-        serve.''')
+        '--client', help='''Specify a custom client HTML file to serve.''')
     parser.add_argument(
         '-p', '--port', type=int, default=8000, help='''The port to start the
         server on. Default is 8000.''')
@@ -287,8 +305,8 @@ def main():
         array = image_to_array(args.input, mode=args.mode)
 
     print('starting server at http://localhost:%s/' % args.port)
-    run(array, tile_size=args.tile_size, client=args.client, port=args.port,
-        debug=args.debug)
+    run(array, cmap=args.cmap, tile_size=args.tile_size, client=args.client,
+        port=args.port, debug=args.debug)
 
 
 if __name__ == '__main__':
