@@ -14,7 +14,7 @@ from projectile.get_test_data import main as get_test_data
 
 
 class TileHandler(web.RequestHandler):
-    def initialize(self, array, tile_size=8):
+    def initialize(self, array, tile_size=256):
         """
         Initializes the request handler.
 
@@ -23,7 +23,7 @@ class TileHandler(web.RequestHandler):
         array : np.ndarray
             The array this handler will serve.
         tile_size : int
-            The base 2 log of the maximum tile size to use, in pixels.
+            The resolution of the served image tiles.
         """
         self.array = array
         self.max_z = int(np.ceil(np.log2(max(self.array.shape))))
@@ -40,7 +40,7 @@ class TileHandler(web.RequestHandler):
         """
         z, x, y = map(int, (z, x, y))
         self.send_image(self.make_image(self.get_array_slice(
-            self.get_slices(z, x, y), z, tile_size=self.tile_size)))
+            self.get_slices(z, x, y))))
 
     def get_slices(self, z, x, y):
         """
@@ -66,7 +66,7 @@ class TileHandler(web.RequestHandler):
             return None
         return slice(y * size, (y+1) * size), slice(x * size, (x+1) * size)
 
-    def get_array_slice(self, slices, z, tile_size=8):
+    def get_array_slice(self, slices):
         """
         Slices out the part of the array specified by slices, and shrinks it to
         a specified maximum tile size if necessary.
@@ -77,21 +77,15 @@ class TileHandler(web.RequestHandler):
             The row and column slices appropriate for slicing out the
             desired
             tile from the complete array.
-        z : int
-            The requested zoom level (determines how much shrinkage
-            to apply).
-        tile_size : int
-            The base 2 log of the maximum tile size to use, in pixels.
 
         Returns
         -------
         np.ndarray
-            The sliced and shrunken array.
+            The sliced array.
         """
         if slices is None:
             return np.full((1, 1), 255, dtype=np.uint8)
         size = slices[0].stop - slices[0].start
-        shrinkage_factor = 2 ** (self.max_z - z - tile_size)
         sliced_array = self.array[slices]
         pad = [(0, 0)] * len(sliced_array.shape)
         if sliced_array.shape[0] < size:
@@ -100,36 +94,27 @@ class TileHandler(web.RequestHandler):
             pad[1] = (0, size - sliced_array.shape[1])
         sliced_array = np.pad(sliced_array, pad, mode='constant',
                               constant_values=1)
-        return self.shrink_array(sliced_array, shrinkage_factor)
+        return self.shrink_array(sliced_array)
 
-    @staticmethod
-    def shrink_array(array, factor):
+    def shrink_array(self, array):
         """
-        Shrinks an array by a factor using max-pooling.
+        Shrinks an array to the tile size.
 
         Parameters
         ----------
         array : np.ndarray
             The array to shrink. Can have either 2 or 3 dimensions.
-        factor : int
-            The factor to shrink by.
 
         Returns
         -------
         np.ndarray
             The shrunken array.
         """
-        if factor < 2:
-            return array
-        shape = [array.shape[0] / factor, array.shape[1] / factor,
-                 factor, factor]
-        strides = [array.strides[0] * factor, array.strides[1] * factor,
-                   array.strides[0], array.strides[1]]
-        if len(array.shape) == 3:
-            shape.append(array.shape[2])
-            strides.append(array.strides[2])
-        return np.lib.stride_tricks.as_strided(array, shape, strides)\
-            .max(axis=(2, 3))
+        target_shape = (self.tile_size, self.tile_size) \
+            if len(array.shape) == 2 else (self.tile_size, self.tile_size, 3)
+        return np.asarray(Image.fromarray(array).resize((self.tile_size,
+                                                         self.tile_size)))\
+            .reshape(target_shape)
 
     @staticmethod
     def make_image(array_slice):
@@ -181,8 +166,7 @@ class CmapTileHandler(TileHandler):
         """
         z, x, y, vmin, vmax = map(int, (z, x, y, vmin, vmax))
         self.send_image(self.make_image(self.get_array_slice(
-            self.get_slices(z, x, y), z, tile_size=self.tile_size),
-            cmap, vmin, vmax))
+            self.get_slices(z, x, y)), cmap, vmin, vmax))
 
     def make_image(self, array_slice, cmap, vmin, vmax):
         """
@@ -273,9 +257,8 @@ def main():
         grayscale (L) mode, specify the name of a matplotlib colormap to use to
         color the tiles.''')
     parser.add_argument(
-        '-t', '--tile_size', type=int, default=8, help='''The maximum size of
-        image tiles to serve, on a log base 2 scale. The default is 8 for
-        256 x 256 pixel image tiles.''')
+        '-t', '--tile_size', type=int, default=256, help='''The resolution of
+        the tiles that will be served. Default is 256 for 256x256 tiles.''')
     parser.add_argument(
         '--client', help='''Specify a custom client HTML file to serve.''')
     parser.add_argument(

@@ -55,7 +55,7 @@ Grayscale performance test:
 
 Reducing tile resolution when running in color:
 
-    $ projectile britain.jpg --tile_size 7
+    $ projectile britain.jpg --tile_size 128
 
 Dependencies
 ------------
