@@ -48,7 +48,6 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: |
           python setup.py sdist bdist_wheel --universal
-          twine upload dist/*
       - name: Upload wheel as release asset
         uses: actions/upload-release-asset@v1
         env:
