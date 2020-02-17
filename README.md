@@ -1,6 +1,11 @@
 projectile
 ==========
 
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/projectile.svg)
+[![PyPI - Wheel](https://img.shields.io/pypi/wheel/projectile.svg)](https://pypi.org/project/projectile)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/projectile.svg)](https://pypi.org/project/projectile)
+![Tests](https://github.com/sclabs/projectile/workflows/Tests/badge.svg)
+
 A tile-on-demand tile server built with PIL and Tornado.
 
 Motivation
