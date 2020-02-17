@@ -15,9 +15,9 @@ jobs:
       - name: Get version
         id: get_version
         run: |
-          VERSION="${GITHUB_REF/v/}"
+          VERSION="${GITHUB_REF/refs\/tags\/v/}"
           echo $VERSION
-          echo ""::set-output name=VERSION::$VERSION"
+          echo "::set-output name=VERSION::$VERSION"
         env:
           GITHUB_REF: ${{ github.ref }}
       - name: Set up Python
