@@ -16,6 +16,7 @@ setup(
     cmdclass=versioneer.get_cmdclass(),
     description='A tile-on-demand tile server built with PIL and Tornado',
     long_description=long_description,
+    long_description_content_type='text/markdown',
     url='https://github.com/sclabs/projectile',
     author='Thomas Gilgenast',
     author_email='thomasgilgenast@gmail.com',
