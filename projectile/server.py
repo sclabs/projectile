@@ -1,6 +1,6 @@
 import argparse
-from six.moves import cStringIO as StringIO
 import os
+from io import BytesIO
 
 from tornado import ioloop, web
 from PIL import Image
@@ -161,10 +161,9 @@ class TileHandler(web.RequestHandler):
         image : PIL.Image
             The Image to respond with.
         """
-        stream = StringIO()
+        stream = BytesIO()
         image.save(stream, format='png')
-        for line in stream.getvalue():
-            self.write(line)
+        self.write(stream.getvalue())
         self.set_header('Content-type', 'image/png')
 
 
@@ -282,7 +281,7 @@ def main():
         color the tiles.''')
     parser.add_argument(
         '-t', '--tile_size', type=int, default=256, help='''The resolution of
-        image tiles to serve, in pixels. Must be a power of 2. The default is 
+        image tiles to serve, in pixels. Must be a power of 2. The default is
         256 for 256 x 256 pixel image tiles.''')
     parser.add_argument(
         '--client', help='''Specify a custom client HTML file to serve.''')
